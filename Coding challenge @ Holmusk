@@ -1,0 +1,415 @@
+##### Import dataset and load packages #########################################
+library(readr)
+library(dplyr)
+library(plyr)
+library(tidyverse)
+library(survival)
+library(survminer)
+library(mice)
+
+event <- read_csv("Biostats - RWD drug efficacy/Event_duration.csv", 
+                    +     col_types = 
+                    cols(treatment_variable = 
+                           col_factor(levels = c("Drug_A", "Drug_B"))))
+
+patient <- read_csv("Biostats - RWD drug efficacy/Patient_characteristics.csv")
+
+## Combine both datasets
+all <- cbind(patient,event)
+all <- all[ , !duplicated(colnames(all))] 
+
+## Create subset data without the 0 survival time
+nozero <- subset(all, duration_in_years>0)
+
+
+##### Transforming data #####################################################
+all <- transform(
+  all,
+  treatment_variable=as.factor(treatment_variable),
+  sex=as.factor(sex),
+  other_drugs_1=as.factor(other_drugs_1),
+  other_drugs_2=as.factor(other_drugs_2),
+  other_drugs_3=as.factor(other_drugs_3),
+  other_drugs_4=as.factor(other_drugs_4),
+  other_drugs_5=as.factor(other_drugs_5),
+  other_drugs_6=as.factor(other_drugs_6),
+  other_drugs_7=as.factor(other_drugs_7),
+  other_drugs_8=as.factor(other_drugs_8),
+  diagnosis_1=as.factor(all$diagnosis_1)
+  diagnosis_2=as.factor(diagnosis_2)
+  diagnosis_3=as.factor(diagnosis_3)
+  diagnosis_4=as.factor(diagnosis_4)
+  diagnosis_5=as.factor(diagnosis_5)
+  diagnosis_6=as.factor(diagnosis_6)
+  diagnosis_7=as.factor(diagnosis_7)
+  diagnosis_8=as.factor(diagnosis_8)
+  diagnosis_9=as.factor(diagnosis_9)
+  diagnosis_10=as.factor(diagnosis_10)
+  diagnosis_11=as.factor(diagnosis_11)
+  diagnosis_12=as.factor(diagnosis_12)
+  diagnosis_13=as.factor(diagnosis_13)
+  diagnosis_14=as.factor(diagnosis_14)
+  diagnosis_15=as.factor(diagnosis_15)
+  Diag_Score_1=as.factor(Diag_Score_1)
+  Diag_Score_2=as.factor(Diag_Score_2)
+)
+sapply(all, class)
+
+##### Exploring data visually ###############################################
+# number of bleeding events observed in 2 years
+length(which(all$`Bleeding_event (1=event, 0=censored)`==1))
+# [1] 3577
+
+# Explore frequency of exposure variable
+length(which(all$duration_in_years ==0))
+
+summary(all)
+
+patient %>% select(treatment_variable) %>% 
+  ggplot() + geom_bar(aes(x=treatment_variable, fill = treatment_variable))
+
+# Explore frequency of patient var - diagnosis_xx
+patient %>%
+  gather(var, val, other_drugs_1:other_drugs_8) %>%
+  ggplot(aes(val, group = treatment_variable, fill = treatment_variable)) +
+  geom_bar(alpha = 0.4) +
+  facet_wrap(~var) +
+  theme(legend.position = 'bottom')
+
+# Explore distribution of patient var - labs
+patient %>%
+  gather(var, val, lab_1:lab_8) %>%
+  ggplot(aes(val, group = treatment_variable, fill = treatment_variable)) +
+  geom_boxplot(alpha=0.4) +
+  #geom_density(alpha = 0.4) +
+  facet_wrap(~var) +
+  theme(legend.position = 'bottom')
+
+# Explore distribution of patient var - other_drugs
+patient %>%
+  gather(var, val, other_drugs_1:other_drugs_8) %>%
+  ggplot(aes(val, group = treatment_variable, fill = treatment_variable)) +
+  geom_bar(alpha = 0.4) +
+  facet_wrap(~var) +
+  theme(legend.position = 'bottom')
+
+# Explore distribution of patient var - Diag_scores
+patient %>%
+  gather(var, val, Diag_Score_1:Diag_Score_2) %>%
+  ggplot(aes(val, group = treatment_variable, fill = treatment_variable)) +
+  geom_bar(alpha = 0.4) +
+  facet_wrap(~var) +
+  theme(legend.position = 'bottom')
+
+##### Descriptives and summaries ##########################################
+
+#summarise the frequencies for categorical var
+table(all$treatment_variable)
+table(all$sex, all$treatment_variable)
+summary(all$age)
+ddply(all,~treatment_variable,summarise,mean=mean(age),sd=sd(age),median=median(age),min=min(age),max=max(age))
+table(all$other_drugs_1, all$treatment_variable)
+table(all$other_drugs_2, all$treatment_variable)
+table(all$other_drugs_3, all$treatment_variable)
+table(all$other_drugs_4, all$treatment_variable)
+table(all$other_drugs_5, all$treatment_variable)
+table(all$other_drugs_6, all$treatment_variable)
+table(all$other_drugs_7, all$treatment_variable)
+table(all$other_drugs_8, all$treatment_variable)
+table(all$diagnosis_1, all$treatment_variable)
+table(all$diagnosis_2, all$treatment_variable)
+table(all$diagnosis_3, all$treatment_variable)
+table(all$diagnosis_4, all$treatment_variable)
+table(all$diagnosis_5, all$treatment_variable)
+table(all$diagnosis_6, all$treatment_variable)
+table(all$diagnosis_7, all$treatment_variable)
+table(all$diagnosis_8, all$treatment_variable)
+table(all$diagnosis_9, all$treatment_variable)
+table(all$diagnosis_10, all$treatment_variable)
+table(all$diagnosis_11, all$treatment_variable)
+table(all$diagnosis_12, all$treatment_variable)
+table(all$diagnosis_13, all$treatment_variable)
+table(all$diagnosis_14, all$treatment_variable)
+table(all$diagnosis_15, all$treatment_variable)
+summary(all$lab_1)
+summary(all$lab_2)
+summary(all$lab_3)
+summary(all$lab_4)
+summary(all$lab_5)
+summary(all$lab_6)
+summary(all$lab_7)
+summary(all$lab_8)
+ddply(all,~treatment_variable,summarise,mean=mean(lab_1),sd=sd(lab_1),median=median(lab_1),min=min(lab_1),max=max(lab_1))
+ddply(all,~treatment_variable,summarise,mean=mean(lab_2),sd=sd(lab_2),median=median(lab_2),min=min(lab_2),max=max(lab_2))
+ddply(all,~treatment_variable,summarise,mean=mean(lab_3),sd=sd(lab_3),median=median(lab_3),min=min(lab_3),max=max(lab_3))
+ddply(all,~treatment_variable,summarise,mean=mean(lab_4),sd=sd(lab_4),median=median(lab_4),min=min(lab_4),max=max(lab_4))
+ddply(all,~treatment_variable,summarise,mean=mean(lab_5),sd=sd(lab_5),median=median(lab_5),min=min(lab_5),max=max(lab_5))
+ddply(all,~treatment_variable,summarise,mean=mean(lab_6),sd=sd(lab_6),median=median(lab_6),min=min(lab_6),max=max(lab_6))
+ddply(all,~treatment_variable,summarise,mean=mean(lab_7),sd=sd(lab_7),median=median(lab_7),min=min(lab_7),max=max(lab_7))
+ddply(all,~treatment_variable,summarise,mean=mean(lab_8),sd=sd(lab_8),median=median(lab_8),min=min(lab_8),max=max(lab_8))
+table(all$Diag_Score_1, all$treatment_variable)
+table(all$Diag_Score_2, all$treatment_variable)
+
+#### Checking for associations of covariates ####
+#bivariate tests
+
+# [NOT RUN] t.test(rfs$RFS, rfs$histo)
+wilcox.test(all$age~all$treatment_variable)
+chisq.test(all$sex, all$treatment_variable)
+chisq.test(all$other_drugs_1, all$treatment_variable)
+chisq.test(all$other_drugs_2, all$treatment_variable)
+chisq.test(all$other_drugs_3, all$treatment_variable)
+chisq.test(all$other_drugs_4, all$treatment_variable)
+chisq.test(all$other_drugs_5, all$treatment_variable)
+chisq.test(all$other_drugs_6, all$treatment_variable)
+chisq.test(all$other_drugs_7, all$treatment_variable)
+chisq.test(all$other_drugs_8, all$treatment_variable)
+chisq.test(all$diagnosis_1, all$treatment_variable)
+chisq.test(all$diagnosis_2, all$treatment_variable)
+chisq.test(all$diagnosis_3, all$treatment_variable)
+chisq.test(all$diagnosis_4, all$treatment_variable)
+chisq.test(all$diagnosis_5, all$treatment_variable)
+chisq.test(all$diagnosis_6, all$treatment_variable)
+chisq.test(all$diagnosis_7, all$treatment_variable)
+chisq.test(all$diagnosis_8, all$treatment_variable)
+chisq.test(all$diagnosis_9, all$treatment_variable)
+chisq.test(all$diagnosis_10, all$treatment_variable)
+chisq.test(all$diagnosis_11, all$treatment_variable)
+chisq.test(all$diagnosis_12, all$treatment_variable)
+chisq.test(all$diagnosis_13, all$treatment_variable)
+chisq.test(all$diagnosis_14, all$treatment_variable)
+chisq.test(all$diagnosis_15, all$treatment_variable)
+chisq.test(all$Diag_Score_1, all$treatment_variable)
+chisq.test(all$Diag_Score_2, all$treatment_variable)
+wilcox.test(all$lab_1~all$treatment_variable)
+wilcox.test(all$lab_2~all$treatment_variable)
+wilcox.test(all$lab_3~all$treatment_variable)
+wilcox.test(all$lab_4~all$treatment_variable)
+wilcox.test(all$lab_5~all$treatment_variable)
+wilcox.test(all$lab_6~all$treatment_variable)
+wilcox.test(all$lab_7~all$treatment_variable)
+wilcox.test(all$lab_8~all$treatment_variable)
+
+# Bivariate on imputed lab data - did not change significance vs unimputed
+wilcox.test(cleanall$lab_2~all$treatment_variable)
+wilcox.test(cleanall$lab_3~all$treatment_variable)
+wilcox.test(cleanall$lab_4~all$treatment_variable)
+wilcox.test(cleanall$lab_5~all$treatment_variable)
+wilcox.test(cleanall$lab_6~all$treatment_variable)
+wilcox.test(cleanall$lab_7~all$treatment_variable)
+wilcox.test(cleanall$lab_8~all$treatment_variable)
+
+
+##### Kaplan Meier ####################################################
+kmfit <- survfit(Surv(duration_in_years, `Bleeding_event (1=event, 0=censored)`) ~ treatment_variable, data = event)
+
+kmfit.plot <- ggsurvplot(kmfit, 
+                          data = event,
+                          palette =
+                            c("darkslategrey", "indianred3"),# custom color palettes
+                          conf.int = TRUE,          # Add confidence interval
+                          pval = TRUE,              # Add p-value
+                          pval.method = TRUE,
+                          censor = FALSE,
+                          legend.labs =
+                            c("Drug A", "Drug B"),    # Change legend labels
+                         legend.title="Treatment",
+                          ggtheme = theme_bw()+ theme(plot.title = element_text(hjust = 0.5, face = "bold")), 
+                          xlab = "Duration (years)",
+                          break.x.by = 0.5,
+                          xlim = c(0.09, 2),
+                          title = "Kaplan Meier Survival Estimates"
+                          
+) 
+
+# Logrank test
+survdiff(Surv(event$duration_in_years, event$`Bleeding_event (1=event, 0=censored)`) ~ event$treatment_variable)
+
+
+
+##### Multiple imputation using MICE package ####################################
+require(mice)
+patientimp=patient
+
+my_imp2 = mice(patientimp, m=5, 
+             #blocks=
+              method = c("pmm"),
+              seed=11, 
+              maxit=6)     #default 5
+summary(all$lab_1)
+my_imp2$imp$lab_2
+cleanpt = complete(my_imp2,3)
+
+cleanall<-cbind(cleanpt,event)
+cleanall <- cleanall[ , !duplicated(colnames(cleanall))] 
+
+
+##### Cox Proportional hazards model ###########################################
+
+# make indicator variables for Diag Score 1
+all$Diag_Score_1 <- as.factor(all$Diag_Score_1)
+all$dscore1_1 <- 0
+all$dscore1_1[all$Diag_Score_1 == 1] <- 1
+all$dscore1_2 <- 0
+all$dscore1_2[all$Diag_Score_1 == 2] <- 1
+all$dscore1_3 <- 0
+all$dscore1_3[all$Diag_Score_1 == 3] <- 1
+all$dscore1_4 <- 0
+all$dscore1_4[all$Diag_Score_1 == 4] <- 1
+all$dscore1_5 <- 0
+all$dscore1_5[all$Diag_Score_1 == 5] <- 1
+all$dscore1_6 <- 0
+all$dscore1_6[all$Diag_Score_1 == 6] <- 1
+
+cleanall$Diag_Score_1 <- as.factor(cleanall$Diag_Score_1)
+cleanall$dscore1_1 <- 0
+cleanall$dscore1_1[cleanall$Diag_Score_1 == 1] <- 1
+cleanall$dscore1_2 <- 0
+cleanall$dscore1_2[cleanall$Diag_Score_1 == 2] <- 1
+cleanall$dscore1_3 <- 0
+cleanall$dscore1_3[cleanall$Diag_Score_1 == 3] <- 1
+cleanall$dscore1_4 <- 0
+cleanall$dscore1_4[cleanall$Diag_Score_1 == 4] <- 1
+cleanall$dscore1_5 <- 0
+cleanall$dscore1_5[cleanall$Diag_Score_1 == 5] <- 1
+cleanall$dscore1_6 <- 0
+cleanall$dscore1_6[cleanall$Diag_Score_1 == 6] <- 1
+
+# test PH assumption. If p<0.05 then doesnt fulfil PH assmpt
+cox.zph(cox)
+ggcoxzph(cox.zph(coxm8))
+
+# Cox modelling
+## Model 1, only treatment covariate
+coxbase <- coxph(Surv(event$duration_in_years, event$`Bleeding_event (1=event, 0=censored)`) ~ patient$treatment_variable)  #name data here so we dont have to repeat data$xx, data$ss..
+summary(coxbase)
+## logrank test for model 1
+survdiff(Surv(event$duration_in_years, event$`Bleeding_event (1=event, 0=censored)`) ~ event$treatment_variable)
+
+## Model 2, adjusted for age and sex
+coxm2 <- coxph(Surv(event$duration_in_years, event$`Bleeding_event (1=event, 0=censored)`) ~ patient$treatment_variable + patient$sex + patient$age)
+summary(coxm2)
+## logrank test for model 2
+survdiff(Surv(event$duration_in_years, event$`Bleeding_event (1=event, 0=censored)`) ~ patient$treatment_variable + patient$sex + patient$age)
+
+## Model 3, adjusted for age and sex and significant other drugs variables
+coxm3 <- coxph(Surv(duration_in_years, `Bleeding_event (1=event, 0=censored)`) 
+                    ~ treatment_variable + sex + age +
+                      other_drugs_1 + other_drugs_2 + other_drugs_3 +
+                      other_drugs_7 + other_drugs_8,data=all)
+summary(coxm3)
+cox.zph(coxm3)
+
+## Model 4 full model with age, sex, sig other drugs and dx
+coxm4 <- coxph(Surv(duration_in_years, `Bleeding_event (1=event, 0=censored)`) 
+               ~ treatment_variable + sex + age +
+                 other_drugs_1 + other_drugs_2 + other_drugs_3 +
+                 other_drugs_7 + other_drugs_8 + diagnosis_2 +
+                 diagnosis_3 + diagnosis_4 + diagnosis_5 + diagnosis_6 +
+                 diagnosis_7 + diagnosis_8 + diagnosis_9 + diagnosis_13
+               ,data=all)
+summary(coxm4)
+cox.zph(coxm4)
+
+## Model 5 full model with all P<0.001 significant covariates
+coxm5 <- coxph(Surv(duration_in_years, `Bleeding_event (1=event, 0=censored)`) 
+               ~ treatment_variable + sex + age +
+                 other_drugs_1 + other_drugs_2 + other_drugs_3 +
+                 other_drugs_7 + other_drugs_8 + diagnosis_2 +
+                 diagnosis_3 + diagnosis_4 + diagnosis_5 + diagnosis_6 +
+                 diagnosis_7 + diagnosis_8 + diagnosis_9 + diagnosis_13 +
+                 lab_1 + lab_2 + lab_4 + lab_6 + lab_7 
+               + dscore1_1 + dscore1_2 + dscore1_3 + dscore1_4 +
+                 dscore1_5 + dscore1_6
+               ,data=all)
+summary(coxm5)
+
+## Model 6 only the significant ones (p<0.1) in m5 
+coxm6 <- coxph(Surv(duration_in_years, `Bleeding_event (1=event, 0=censored)`) 
+               ~ treatment_variable + other_drugs_1 + diagnosis_2 +
+                 diagnosis_5 + diagnosis_13 + 
+                 lab_2 + dscore1_2 + dscore1_5 
+               ,data=all)
+summary(coxm6)
+diag <- cox.zph(coxm6) # PH maintained
+plot(diag) #diagnostic plots
+
+# Model 7 - like model 5 but using imputed data
+coxm7 <- coxph(Surv(duration_in_years, `Bleeding_event (1=event, 0=censored)`) 
+               ~ treatment_variable + sex + age +
+                 other_drugs_1 + other_drugs_2 + other_drugs_3 +
+                 other_drugs_7 + other_drugs_8 + diagnosis_2 +
+                 diagnosis_3 + diagnosis_4 + diagnosis_5 + diagnosis_6 +
+                 diagnosis_7 + diagnosis_8 + diagnosis_9 + diagnosis_13 +
+                 lab_1 + lab_2 + lab_4 + lab_6 + 
+                 lab_7 + dscore1_1 + dscore1_2 + dscore1_3 + dscore1_4 +
+                 dscore1_5 + dscore1_6
+               ,data=cleanall)
+summary(coxm7)
+
+# Model 8 - only those sig in model 7
+coxm8 <- coxph(Surv(duration_in_years, `Bleeding_event (1=event, 0=censored)`) 
+               ~ treatment_variable + age +
+                 other_drugs_2 + other_drugs_3 +
+                 other_drugs_7 + other_drugs_8 +
+                 diagnosis_3 + diagnosis_6 +
+                 diagnosis_7 + diagnosis_8 + diagnosis_9  +
+                 lab_1 + lab_7 + dscore1_2 + dscore1_3 + dscore1_4 +
+                 dscore1_5 + dscore1_6
+               ,data=cleanall)
+summary(coxm8)
+cox.zph(coxm8)
+
+# plotting deviance residuals
+ggcoxdiagnostics(coxm6, type = "deviance", 
+                 linear.predictions = FALSE, ggtheme = theme_bw()) 
+
+# Graph the adjusted curve
+coxfit = survfit(coxm5)
+autoplot(coxfit)
+
+
+
+
+
+
+
+#### SURVIVAL TREE ####
+# not included in responses to coding challenge
+
+library(ranger)    # other package = "rpart" part of R ML package
+
+streefit = ranger(Surv(duration_in_years, `Bleeding_event (1=event, 0=censored)`) ~ treatment_variable + age + Diag_Score_1 + Diag_Score_2 + lab_1,
+                  
+                   data=all,    # up till here, similar to cox
+                  
+                  importance = "permutation",    # let us set importance of a variable at a node
+                  
+                  splitrule = "extratrees",      # tells the function how to calculate the cut off point of the splits 
+                  
+                  seed = 43)   
+
+#other arguments: num.trees = number of trees
+# mtry = number of variables to splot
+
+# extract from the streefit object cos too large alr
+# Average the survival models
+
+death_times = streefit$unique.death.times
+
+surv_prob = data.frame(streefit$survival)
+
+avg_prob = sapply(surv_prob,mean)
+median_prob = sapply(surv_prob,median)   # can use median as well, as appropriate if our data allows
+
+
+# Plot the survival tree model - average
+
+plot(death_times, avg_prob,
+     type = "s",                 # plot type is always step plot in survival analysis
+     ylim = c(0,1),              # define y axis scale
+     col = "red", lwd = 2, bty = "n",     # line width doubles, bty n removes the box around the whole plot
+     ylab = "Survival Probability", xlab = "Duration in Years",
+     main = "Survival Tree Model\nAverage Survival Curve")
+
+

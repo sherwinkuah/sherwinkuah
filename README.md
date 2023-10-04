@@ -1,6 +1,6 @@
 - 👋 Hi, I’m @sherwinkuah
 - 👀 I’m interested in Epidemiology studies and real world evidence
-- 🌱 I’m currently learning biostatistics with python and deepening my R coding skills
+- 🌱 I’m currently deepening my python, R, and SQL coding skills
 - 📫 How to reach me - sherwinkuah@gmail.com
 
 <!---
